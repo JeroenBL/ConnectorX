@@ -1,4 +1,4 @@
-# ConnectorXGenerator
+# ConnectorX
 
 Goal: generate HelloID provisioning connector scripts (PowerShell V2) for a
 target application, based on the templates in /templates.
