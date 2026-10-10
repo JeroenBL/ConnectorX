@@ -1,7 +1,7 @@
 # ConnectorX
 
 <p align="left">
-  <img src="https://raw.githubusercontent.com/JeroenBL/ConnectorGenerator/main/x.png" width="300">
+  <img src="https://raw.githubusercontent.com/JeroenBL/ConnectorX/refs/heads/main/x.png" width="500">
 </p>
 
 ## Introduction
