@@ -1,0 +1,909 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Demo Target Application API",
+    "description": "This example API specifies the minimal requirements for developing a new API that will be used for user provisioning from HelloID.",
+    "version": "2.1.2"
+  },
+  "paths": {
+    "/api/oauth/token": {
+      "post": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Retrieve an access token using a clientId and clientSecret",
+        "description": "<h2>Implementation notes</h2>\r\n            We prefer OAuth for authentication because it’s secure, easy to use, and works smoothly with modern apps and APIs.\r\n            \r\n\r\n            Example request:\r\n            \r\n                POST /oauth/token\r\n                {\r\n                    \"client_id\": \"example-client-id\",\r\n                    \"client_secret\": \"example-client-secret\"\r\n                }",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              },
+              "example": {"client_id":"test","client_secret":"test"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A valid access token was issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was malformed or missing required fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or was not provided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Retrieve all users",
+        "description": "<h2>Implementation notes</h2>\r\n            This endpoint returns all users in the system.  \r\n            It is primarily used to support the import entitlement feature, enable reconciliation,\r\n            and ensure proper governance across connected systems.",
+        "operationId": "ListUsers",
+        "responses": {
+          "200": {
+            "description": "A list of users was successfully retrieved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/User"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or was not provided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Create a new user",
+        "description": "<h2>Implementation notes</h2>\r\n            This endpoint creates a new user account in the target system.\r\n            The response must include the internal database `id` because this is the key used for correlation\r\n            and will be required for subsequent update, patch, and delete operations.\r\n            \r\n\r\n            Example request:\r\n            \r\n                POST /user\r\n                {\r\n                   \"employeeId\": \"1000000\",\r\n                   \"firstName\": \"John\",\r\n                   \"lastName\": \"Doe\",\r\n                   \"email\": \"JDoe@enyoi\",\r\n                   \"active\": false\r\n                }",
+        "operationId": "AddUser",
+        "requestBody": {
+          "description": "The user object to create.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The user was successfully created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or was not provided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/employeeid/{employeeid}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Retrieve a user (by employeeId)",
+        "description": "<h2>Implementation notes</h2>\r\n            Before we add a user account to the target application, we must validate whether that user already exists.\r\n            Since the internal database ID is not known at the time of the initial create event,\r\n            we use the `employeeId` (which is unique and provided by HelloID) for validation.\r\n            \r\n\r\n            Once the user account is created and correlated, subsequent events will use the internal database ID for lookups.",
+        "operationId": "GetUserByEmployeeId",
+        "parameters": [
+          {
+            "name": "employeeid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The user was found and returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No user with the specified employee ID was found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or was not provided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user (by Id)",
+        "description": "<h2>Implementation notes</h2>\r\n            Before we update a particular user account, we need to validate if that user account still exists.\r\n            \r\n\r\n            Validating if the user account exists is an integral part in all our lifecycle events because the user \r\n            account might be <em>unintentionally</em> delete, in which case the lifecycle event will fail.\r\n            For example: when we want to enable the user account on the day the contract takes effect.",
+        "operationId": "GetUserById",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The user was found and returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No user with the specified  was found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or was not provided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Partially update a user (by Id)",
+        "description": "<h2>Implementation notes</h2>\r\n            This endpoint supports partial updates to a user account using the HTTP PATCH method.\r\n            Only the specified fields in the patch document will be updated.\r\n            \r\n<em>This implementation uses <a href=\"https://jsonpatch.com/\">JSON Patch</a>,\r\n            which allows operations like `replace`, `add`, and `remove`.\r\n            Consider whether JSON Patch is the best solution for your application before using it.</em>\r\n\r\n            Example request:\r\n            \r\n                PATCH /user/{id}\r\n                [  \r\n                    {\r\n                        \"op\": \"replace\",\r\n                        \"path\": \"active\",\r\n                        \"value\": \"false\"\r\n                    }\r\n                ]",
+        "operationId": "PatchUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The internal database ID of the user to update.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "The JSON Patch document describing the updates to apply.",
+          "content": {
+            "application/json-patch+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserJsonPatchDocument"
+              },
+              "example": [{"op":"replace","path":"active","value":false}]
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserJsonPatchDocument"
+              },
+              "example": [{"op":"replace","path":"active","value":false}]
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The user was successfully updated and returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The patch document was invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No user with the specified ID was found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or was not provided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete user (by Id)",
+        "description": "<h2>Implementation notes</h2>\r\n            This action does not require a response. A [204 No Content] is sufficient.",
+        "operationId": "DeleteUser",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The user was successfully removed."
+          },
+          "404": {
+            "description": "No user with the specified Id was found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/roles": {
+      "get": {
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Get all roles",
+        "description": "<h2>Implementation notes</h2>\r\n            Before we can assign a role to a user, we first need to retrieve all available roles. Then, we build out our business rules to, ultimately grant authorizations to users based on information coming from an HR source.",
+        "operationId": "GetAllRoles",
+        "responses": {
+          "200": {
+            "description": "A list of roles was successfully retrieved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Role"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or was not provided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Roles"
+        ],
+        "summary": "Create a new role in the target system.",
+        "description": "<h2>Purpose</h2>\r\n             This endpoint is used to create new roles in the target system.\r\n            \r\n             In most scenarios, roles are predefined in the target system.\r\n             However, this endpoint can be used to dynamically create roles\r\n             if they do not yet exist.\r\n            \r\n             - The role is uniquely identified by its DisplayName.\r\n             - If a role with the same DisplayName already exists, the request will be rejected.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Role"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The role was successfully created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Role"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or role already exists.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication failed or was not provided."
+          }
+        }
+      }
+    },
+    "/api/authorizations": {
+      "get": {
+        "tags": [
+          "Authorizations"
+        ],
+        "summary": "Get all authorizations for all users",
+        "description": "<h2>Implementation notes</h2>\r\n            We need to retrieve information about all authorizations to support our import entitlement feature, enable reconciliation, and ultimately ensure proper governance.",
+        "operationId": "GetAllAuthorizations",
+        "responses": {
+          "200": {
+            "description": "Returns the list of all authorizations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Authorization"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Authorizations"
+        ],
+        "summary": "Add a new authorization for a user",
+        "description": "<h2>Implementation notes</h2>\r\n            This action is used when an authorization is granted to a user.  \r\n            If an identical authorization already exists for the given `userId` and `roleId`,  \r\n            the existing record will be returned with a `200 OK` response instead of creating a duplicate.  \r\n            \r\n\r\n\r\n            Example request:\r\n              \r\n                POST /authorization\r\n                {\r\n                   \"roleId\": 1,\r\n                   \"userId\": 1\r\n                }",
+        "operationId": "AddAuthorization",
+        "requestBody": {
+          "description": "The authorization object to add.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Authorization"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The authorization was successfully created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Authorization"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "The authorization already existed and is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Authorization"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request payload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/authorizations/user/{userId}": {
+      "get": {
+        "tags": [
+          "Authorizations"
+        ],
+        "summary": "Get all authorizations for a specific user",
+        "description": "<h2>Implementation notes</h2>\r\n            This returns all authorizations currently assigned to the given user.\r\n            \r\n</br>\r\n            Useful when validating which permissions/roles the user has at a given moment.",
+        "operationId": "GetAuthorizationsByUserId",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returns a list of authorizations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Authorization"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "If the user has no authorizations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/authorizations/{id}": {
+      "delete": {
+        "tags": [
+          "Authorizations"
+        ],
+        "summary": "Delete authorization (by Id)",
+        "description": "<h2>Implementation notes</h2>\r\n            We will use this action when an authorization is revoked from a user. This action does not require a response. A [204 No Content] is sufficient.",
+        "operationId": "DeleteAuthorization",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The authorization was successfully removed."
+          },
+          "401": {
+            "description": "Authentication required or failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No authorization with the specified Id was found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Version": {
+      "get": {
+        "tags": [
+          "Version"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Authorization": {
+        "required": [
+          "RoleId",
+          "UserId"
+        ],
+        "type": "object",
+        "properties": {
+          "Id": {
+            "type": "integer",
+            "description": "This is the internal / database Id.\r\n\r\n\r\nTypically this value will be set by the application itself.\r\n</br>",
+            "format": "int32",
+            "readOnly": true
+          },
+          "RoleId": {
+            "type": "integer",
+            "description": "The Id of the role that will be assigned.",
+            "format": "int32",
+            "example": 1
+          },
+          "UserId": {
+            "type": "integer",
+            "description": "The Id of the user who will be assigned to this authorization.",
+            "format": "int32",
+            "example": 1
+          }
+        },
+        "additionalProperties": false,
+        "description": "A user can have multiple authorizations. Each authorization will only have one role like; Admin or Helpdesk.\r\n\r\n\r\nA user will be assigned (granted) to an authorization.\r\n</br>"
+      },
+      "IContractResolver": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "OAuthErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "error_description": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "OperationType": {
+        "enum": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "type": "integer",
+        "format": "int32"
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": { }
+      },
+      "Role": {
+        "type": "object",
+        "properties": {
+          "Id": {
+            "type": "integer",
+            "description": "This is the internal / database Id.\r\n\r\n\r\nTypically this value will be set by the application itself.\r\n</br>",
+            "format": "int32",
+            "readOnly": true
+          },
+          "DisplayName": {
+            "type": "string",
+            "description": "The DisplayName of the role",
+            "nullable": true,
+            "example": "Admin"
+          }
+        },
+        "additionalProperties": false,
+        "description": "The roles that are available in the target system. Like; 'HelpDesk' or 'Admin'."
+      },
+      "TokenRequest": {
+        "type": "object",
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "description": "The ClientId to authenticate to the example API.",
+            "nullable": true,
+            "example": "example-client-id"
+          },
+          "client_secret": {
+            "type": "string",
+            "description": "The ClientSecret to authenticate to the example API.",
+            "nullable": true,
+            "example": "example-client-secret"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "nullable": true
+          },
+          "token_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "User": {
+        "required": [
+          "Active",
+          "Email",
+          "EmployeeId",
+          "FirstName",
+          "LastName"
+        ],
+        "type": "object",
+        "properties": {
+          "Id": {
+            "type": "integer",
+            "description": "This is the internal / database Id.\r\n\r\n\r\nTypically this value will be set by the application itself.\r\n</br>",
+            "format": "int32",
+            "readOnly": true
+          },
+          "EmployeeId": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The EmployeeId or ExternalId of the user.",
+            "example": "100000"
+          },
+          "FirstName": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The firstName of the user.",
+            "example": "John"
+          },
+          "LastName": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The lastName of the user.",
+            "example": "Doe"
+          },
+          "Email": {
+            "minLength": 1,
+            "type": "string",
+            "description": "The email address of the user.",
+            "example": "J.Doe@enyoi"
+          },
+          "Active": {
+            "type": "boolean",
+            "description": "Defines if the user is active or not. We will update this value when a user is enabled or disabled.\r\n\r\n<h3>Remarks</h3>\r\nDefines if the user is active or not. We will update this value when a user is enabled or disabled. \r\nWhen we initially create a user, we prefer to create that user in a `disabled state`. On the day the contract takes effect the user account will be enabled.\r\n</br>"
+          }
+        },
+        "additionalProperties": false,
+        "description": "The user schema contains all the parameters we expect to be present in an application.\r\n\r\n\r\nYour application / user schema might have different names for parameters, or far more parameters than enlisted in this schema.\r\nFor example: A 'PhoneNumber' for two-factor authentication or a more complex multi-layered schema.\r\n</br>\r\n\r\nThis schema contains the bare minimum we need in order to build a solid connector.\r\n</br>"
+      },
+      "UserJsonPatchDocument": {
+        "type": "object",
+        "properties": {
+          "Operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserOperation"
+            },
+            "nullable": true,
+            "readOnly": true
+          },
+          "ContractResolver": {
+            "$ref": "#/components/schemas/IContractResolver"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UserOperation": {
+        "type": "object",
+        "properties": {
+          "OperationType": {
+            "$ref": "#/components/schemas/OperationType"
+          },
+          "path": {
+            "type": "string",
+            "nullable": true
+          },
+          "op": {
+            "type": "string",
+            "nullable": true
+          },
+          "from": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "description": "The bearer token",
+        "scheme": "Bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "Bearer": [ ]
+    }
+  ]
+}

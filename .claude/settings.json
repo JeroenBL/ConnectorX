@@ -1,0 +1,12 @@
+{
+    "permissions": {
+        "defaultMode": "default",
+        "allow": [
+        "Bash(pwsh:*)",
+        "Bash(powershell:*)",
+        "PowerShell(./tools/Get-SpecDigest.ps1 -SpecPath \"specs/example/example.json\" -Route /api/users -Method POST)",
+        "Bash(./tools/Get-SpecDigest.ps1 *)",
+        "PowerShell(Invoke-Pester *)"
+        ]
+    }
+}
