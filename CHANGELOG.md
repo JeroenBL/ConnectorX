@@ -3,6 +3,20 @@
 All notable changes to ConnectorX (the HelloID connector generator) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.0.2]
+ 
+### Added
+- `AGENTS.md` as the shared, tool-neutral source of truth for project
+  rules (previously only `CLAUDE.md`), enabling reuse across Claude
+  Code, OpenAI Codex, GitHub Copilot.
+- Cross-tool skill layout for `/new-connector`: the skill now exists as
+  a `SKILL.md` directory (the shared `agentskills.io` format) instead
+  of a single command file, mirrored across each tool's expected
+  location:
+  - `.claude/skills/new-connector/SKILL.md` (Claude Code)
+  - `.agents/skills/new-connector/SKILL.md` (Codex)
+  - `.github/skills/new-connector/SKILL.md` (Copilot)
+
 ## [0.0.1]
 
 ### Added
