@@ -83,6 +83,7 @@ action as done.
 For each generated file, run:
 - Invoke-ScriptAnalyzer -Path generated/<target>/<action>.ps1
 - Invoke-Pester tests/ (if tests already exist for this target)
+- Do not use the skills/code-review agent for this step
 
 Fix straightforward style/syntax issues yourself. If an issue touches
 business logic (correlation order, dry-run behavior, auth flow), stop
@@ -95,5 +96,6 @@ End with a numbered list of:
   the template or conventions
 - fields mapped without full certainty
 - what I need to test in HelloID before this goes to review
+- Write the report to generated/<target>/<target>-report.md
 
 Do not silently invent anything. When in doubt, ask instead of guessing.

@@ -1,5 +1,5 @@
 #################################################
-# HelloID-Conn-Prov-example-Create
+# HelloID-Conn-Prov-Example-Create
 # PowerShell V2
 #################################################
 
@@ -33,9 +33,8 @@ function Resolve-ExampleError {
             }
         }
         try {
-            # $errorDetailsObject = ($httpErrorObj.ErrorDetails | ConvertFrom-Json)
+            $errorDetailsObject = ($httpErrorObj.ErrorDetails | ConvertFrom-Json)
             # Make sure to inspect the error result object and add only the error message as a FriendlyMessage.
-            # $httpErrorObj.FriendlyMessage = $errorDetailsObject.message
             $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails # Temporarily assignment
         }
         catch {
@@ -50,40 +49,13 @@ function Resolve-ExampleError {
 try {
     # Initial Assignments
     $outputContext.AccountReference = 'Currently not available'
-    $token = $null
 
-    # --- 1. Authentication: Retrieve Bearer Token ---
-    $tokenUri = "$($actionContext.Configuration.BaseUrl)/api/oauth/token"
-    $tokenParams = @{
-        Uri    = $tokenUri
-        Method = 'POST'
-        Body   = @{
-            client_id = $actionContext.Configuration.OAuthClientId
-            client_secret = $actionContext.Configuration.OAuthClientSecret
-        } | ConvertTo-Json
-        ContentType = 'application/json'
-    }
-
-    if (-not($actionContext.DryRun -eq $true)) {
-        Write-Information "Authenticating against $($actionContext.Configuration.BaseUrl)/api/oauth/token..."
-        $tokenResponse = Invoke-RestMethod @tokenParams
-        $token = @{
-            access_token = $tokenResponse.access_token
-            token_type = $tokenResponse.token_type
-        }
-    } else {
-        Write-Information '[DryRun] Authenticating against $($actionContext.Configuration.BaseUrl)/api/oauth/token.'
-    }
-
-    if ($null -eq $token.access_token) {
-        throw 'Authentication failed: No access token retrieved.'
-    }
-
-    # --- 2. Correlation lookup by EmployeeId ---
-    $correlationField = $actionContext.CorrelationConfiguration.AccountField
-    $correlationValue = $actionContext.CorrelationConfiguration.PersonFieldValue
-
+    # Validate correlation configuration
     if ($actionContext.CorrelationConfiguration.Enabled) {
+        $correlationField = $actionContext.CorrelationConfiguration.AccountField
+        $correlationValue = $actionContext.CorrelationConfiguration.PersonFieldValue
+        $token = $actionContext.Token # Assume token is pre-fetched in the main flow
+
         if ([string]::IsNullOrEmpty($($correlationField))) {
             throw 'Correlation is enabled but not configured correctly'
         }
@@ -91,95 +63,86 @@ try {
             throw 'Correlation is enabled but [accountFieldValue] is empty. Please make sure it is correctly mapped'
         }
 
-        $correlationUri = "$($actionContext.Configuration.BaseUrl)/api/users/employeeid/$($correlationValue)"
+        # Determine if a user needs to be [created] or [correlated]
+        Write-Information "Verifying if an example account exists where $correlationField is: [$correlationValue]"
+
+        # API call to retrieve user details by EmployeeId (Correlation Lookup)
         $splatGetAccountParams = @{
-            Uri     = $correlationUri
+            Uri     = "$($actionContext.Configuration.BaseUrl)/api/users/employeeid/$($correlationValue)"
             Method  = 'GET'
-            Headers = @{ Authorization = "$($token.token_type) $($token.access_token)" }
+            Headers = @{ Authorization = "Bearer $($token.access_token)" }
         }
 
-        $correlatedAccount = @()
-        if (-not($actionContext.DryRun -eq $true)) {
-            Write-Information "Verifying if an example account exists where $correlationField is: [$($correlationValue)]"
-            try {
-                $correlatedAccount = Invoke-RestMethod @splatGetAccountParams
-            } catch {
-                if ($_.Exception.Response.StatusCode -eq 'NotFound') {
-                    $correlatedAccount = @()
-                } else {
-                    throw # Re-throw other errors
-                }
-            }
-        } else {
-            Write-Information '[DryRun] Correlating account via GET /api/users/employeeid/'
-        }
+        $correlatedAccountResponse = Invoke-RestMethod @splatGetAccountParams
+
+        # The response for this endpoint is a single object, not a collection, when found
+        $correlatedAccount = @($correlatedAccountResponse)
     }
 
-    # --- 3. Correlation decision ---
-    $lifecycleProcess = $null
+    # Check for multiple matches first, then null, then single match:
     if ($correlatedAccount.Count -gt 1) {
-        throw "Multiple accounts found for person where $correlationField is: [$($correlationValue)]"
+        throw "Multiple accounts found for person where $correlationField is: [$correlationValue]"
     } elseif ($null -eq $correlatedAccount) {
         $lifecycleProcess = 'CreateAccount'
     } else {
         $lifecycleProcess = 'CorrelateAccount'
     }
 
-    # --- 4. Process: Create or Correlate ---
+    # Process
     switch ($lifecycleProcess) {
         'CreateAccount' {
+            Write-Information 'Creating and correlating example account'
+
+            # API call to create a new user (Create Endpoint)
             $splatCreateParams = @{
                 Uri    = "$($actionContext.Configuration.BaseUrl)/api/users"
                 Method = 'POST'
-                Body   = @{
-                    EmployeeId = $actionContext.Data.CorrelationConfiguration.PersonFieldValue
-                    FirstName  = $actionContext.Data.DisplayName.FirstName
-                    LastName   = $actionContext.Data.DisplayName.LastName
-                    Email      = $actionContext.Data.DisplayName.Email
-                    Active     = $actionContext.Data.DisplayName.IsActive
-                } | ConvertTo-Json
+                Headers = @{ Authorization = "Bearer $($token.access_token)" }
                 ContentType = 'application/json'
-                Headers = @{ Authorization = "$($token.token_type) $($token.access_token)" }
+                Body   = $actionContext.Data | ConvertTo-Json
             }
 
             if (-not($actionContext.DryRun -eq $true)) {
-                Write-Information 'Creating and correlating example account'
+                Write-Information 'Executing API call to create account'
                 $createdAccount = Invoke-RestMethod @splatCreateParams
 
                 $outputContext.Data = $createdAccount
                 $outputContext.AccountReference = $createdAccount.Id
-            } else {
-                Write-Information '[DryRun] Create example account, will be executed during enforcement'
-                # In DryRun, we simulate successful creation to proceed to reporting steps
-                $outputContext.Data = @{ Id = New-Guid; EmployeeId = $actionContext.Data.CorrelationConfiguration.PersonFieldValue; FirstName = $actionContext.Data.DisplayName.FirstName; LastName = $actionContext.Data.DisplayName.LastName; Email = $actionContext.Data.DisplayName.Email; Active = $actionContext.Data.DisplayName.IsActive }
-                $outputContext.AccountReference = (New-Guid).Guid
             }
+            else {
+                Write-Information '[DryRun] Create and correlate example account, will be executed during enforcement'
+                $outputContext.Data = $actionContext.Data # Simulate data return in DryRun
+                $outputContext.AccountReference = $actionContext.Data.Id # Simulate ID assignment
+            }
+
             $auditLogMessage = "Create account was successful. AccountReference is: [$($outputContext.AccountReference)]"
+            break
         }
 
         'CorrelateAccount' {
             Write-Information 'Correlating example account'
 
-            $outputContext.Data = $correlatedAccount
-            $outputContext.AccountReference = $correlatedAccount.Id
+            # The correlated account data is already in $correlatedAccount response
+            $outputContext.Data = $correlatedAccount[0] # Use the single found object
+            $outputContext.AccountReference = $correlatedAccount[0].Id
             $outputContext.AccountCorrelated = $true
             $auditLogMessage = "Correlated account: [$($outputContext.AccountReference)] on field: [$($correlationField)] with value: [$($correlationValue)]"
+            break
         }
     }
 
     $outputContext.success = $true
     $outputContext.AuditLogs.Add([PSCustomObject]@{
-            Action  = $lifecycleProcess
-            Message = $auditLogMessage
-            IsError = $false
-        })
+        Action  = $lifecycleProcess
+        Message = $auditLogMessage
+        IsError = $false
+    })
 }
 catch {
     $outputContext.success = $false
-    $ex = $_
-    if ($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException' -or
-        $ex.Exception.GetType().FullName -eq 'System.Net.WebException') {
-
+    $ex = $PSItem
+    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
+        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-ExampleError -ErrorObject $ex
         $auditLogMessage = "Could not create or correlate example account: [$($actionContext.References.Account)]. Error: $($errorObj.FriendlyMessage)"
         Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
@@ -189,7 +152,7 @@ catch {
         Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
     $outputContext.AuditLogs.Add([PSCustomObject]@{
-            Message = $auditLogMessage
-            IsError = $true
-        })
+        Message = $auditLogMessage
+        IsError = $true
+    })
 }

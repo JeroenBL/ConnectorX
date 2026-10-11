@@ -1,45 +1,56 @@
-# Confirmed API Endpoints and Details for ConnectorX - Create Action
+# API Specification Digest for ConnectorX - example
 
-## 🔑 Authentication (Token Acquisition)
+## Security
+The system uses OAuth2 Bearer Token authentication. A token must be acquired via the dedicated token endpoint before making any calls.
 
-**Endpoint:** `POST /api/oauth/token`
-**Purpose:** Retrieves an access token.
-**Request Body (JSON):**
-- `client_id` (string): The ClientId for authentication.
-- `client_secret` (string): The ClientSecret for authentication.
-**Response Body (JSON) (200 OK):**
-- `access_token` (string): The obtained token.
-- `token_type` (string): The token type (e.g., Bearer).
-- `expires_in` (integer): Token expiry time in seconds.
+### Token Acquisition
+*   **Endpoint:** `POST /api/oauth/token`
+*   **Purpose:** Retrieve Bearer Token
+*   **Request Body Fields:** `client_id`, `client_secret`
+*   **Response Fields:** `access_token`, `token_type`, `expires_in`
+*   **Notes:** This token must be used in the Authorization header (`Bearer <token>`) for all subsequent secured API calls.
 
-## 🔎 Correlation Lookup (Existence Check)
+---
 
-**Endpoint:** `GET /api/users/employeeid/{employeeid}`
-**Purpose:** Checks for existing users using an external correlation identifier.
-**Status Note:** *The specific route `/api/users/employeeid/{employeeid}` was not found using the digest tool, but was inferred from the initial digest pass. Proceeding with this assumption.*
-**Request:** None
-**Response Body (JSON):**
-- `Id` (integer): The internal system ID.
-- `EmployeeId` (string): The external correlation ID.
-- `FirstName` (string): User's first name.
-- `LastName` (string): User's last name.
-- `Email` (string): User's email address.
-- `Active` (boolean): User's active status.
+## Endpoints
 
-## ➕ Create User
+### 👤 User Management (General Lookup)
+*   **Endpoint:** `GET /api/users`
+*   **Purpose:** Retrieve all users.
+*   **Request Fields:** None.
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
 
-**Endpoint:** `POST /api/users`
-**Purpose:** Creates a new user account.
-**Request Body (JSON):**
-- `EmployeeId` (string): The external correlation ID.
-- `FirstName` (string): User's first name.
-- `LastName` (string): User's last name.
-- `Email` (string): User's email address.
-- `Active` (boolean): User's initial active status.
-**Response Body (JSON) (201 Created):**
-- `Id` (integer): The newly created internal system ID.
-- `EmployeeId` (string): The external correlation ID.
-- `FirstName` (string): User's first name.
-- `LastName` (string): User's last name.
-- `Email` (string): User's email address.
-- `Active` (boolean): User's active status.
+### 🧑‍💼 Correlation Lookup (By Correlation Field)
+*   **Endpoint:** `GET /api/users/employeeid/{employeeid}`
+*   **Purpose:** Retrieve user details using a person's identifier.
+*   **Path Parameters:** `employeeid`
+*   **Request Fields:** None.
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+
+### 🆕 Create User
+*   **Endpoint:** `POST /api/users`
+*   **Purpose:** Create a new user account.
+*   **Request Body Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+*   **Notes:** The `Id` field should be provided in the request body but treated as read-only/internal during creation, as per connector conventions.
+
+### 🆔 Internal ID Lookup (By System ID)
+*   **Endpoint:** `GET /api/users/{id}`
+*   **Purpose:** Retrieve user details using the target system's unique ID.
+*   **Path Parameters:** `id` (Target System ID)
+*   **Request Fields:** None.
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+
+### 🔄 Update User
+*   **Endpoint:** `PATCH /api/users/{id}`
+*   **Purpose:** Partially update an existing user.
+*   **Path Parameters:** `id`
+*   **Request Body Fields:** `Operations`, `ContractResolver`
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+
+### 🗑️ Delete User
+*   **Endpoint:** `DELETE /api/users/{id}`
+*   **Purpose:** Delete a user.
+*   **Path Parameters:** `id`
+*   **Request Body Fields:** None.
+*   **Response Fields:** None.
