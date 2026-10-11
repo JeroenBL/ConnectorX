@@ -1,8 +1,8 @@
 param(
     [Parameter(Mandatory)][string]$SpecPath,
     [string[]]$Keyword,
-    [string]$Route,
-    [string]$Method
+    [string[]]$Route,
+    [string[]]$Method
 )
 
 $raw = Get-Content $SpecPath -Raw
@@ -68,10 +68,32 @@ function Get-ResponseSchema($op) {
     }
 }
 
-# Detail mode
+# Detail mode: one or more -Route / -Method pairs, matched by position.
+# Example:
+#   ./Get-SpecDigest.ps1 -SpecPath spec.json `
+#     -Route "/api/users","/api/users/{id}" -Method "post","get"
 if ($Route) {
-    $op = $spec.paths.PSObject.Properties[$Route].Value.$Method
-    Expand-Refs $op $spec | ConvertTo-Json -Depth 20
+    if (-not $Method -or $Route.Count -ne $Method.Count) {
+        throw "Provide exactly one -Method value per -Route value (same count, same order). Got $($Route.Count) route(s) and $(@($Method).Count) method(s)."
+    }
+    for ($i = 0; $i -lt $Route.Count; $i++) {
+        $r = $Route[$i]
+        $m = $Method[$i].ToLower()
+
+        $pathProp = $spec.paths.PSObject.Properties[$r]
+        if (-not $pathProp) {
+            Write-Warning "Route not found in spec: $r"
+            continue
+        }
+        $opProp = $pathProp.Value.PSObject.Properties[$m]
+        if (-not $opProp) {
+            Write-Warning "Method '$m' not found for route '$r'"
+            continue
+        }
+
+        "--- $($m.ToUpper()) $r ---"
+        Expand-Refs $opProp.Value $spec | ConvertTo-Json -Depth 20
+    }
     return
 }
 

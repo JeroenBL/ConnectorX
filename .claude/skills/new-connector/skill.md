@@ -28,8 +28,24 @@ here.
 Locate the spec file in specs/<target>/ (the original OpenAPI/Swagger
 file, e.g. .json or .yaml). If none is found, stop and ask for it.
 
-Run: ./tools/Get-SpecDigest.ps1 -SpecPath specs/<target>/<file> -Keyword user,account,employee,person
-If this returns nothing relevant, retry without -Keyword.
+Run the digest twice, since account endpoints and the auth endpoint
+rarely share keywords:
+
+1. Account/business endpoints:
+   ./tools/Get-SpecDigest.ps1 -SpecPath specs/<target>/<file> -Keyword user,account,employee,person
+   If this returns nothing relevant, retry without -Keyword.
+
+2. Authentication endpoint, always run separately — do not assume it
+   appeared in step 1:
+   ./tools/Get-SpecDigest.ps1 -SpecPath specs/<target>/<file> -Keyword token,auth,oauth,login,credential
+   If this returns nothing relevant, retry without -Keyword and look
+   for the operation yourself in the full, unfiltered digest (commonly
+   tagged "OAuth", "Auth", or similar, or found near the top of the
+   path list).
+
+Never conclude an endpoint doesn't exist based on one keyword-filtered
+pass alone — a keyword filter can legitimately return a non-empty but
+still incomplete result.
 
 ## Step 3: Propose endpoints — STOP HERE
 Based on the digest, propose the endpoints for:
@@ -67,6 +83,7 @@ action as done.
 For each generated file, run:
 - Invoke-ScriptAnalyzer -Path generated/<target>/<action>.ps1
 - Invoke-Pester tests/ (if tests already exist for this target)
+- Do not use the skills/code-review agent for this step
 
 Fix straightforward style/syntax issues yourself. If an issue touches
 business logic (correlation order, dry-run behavior, auth flow), stop
@@ -79,5 +96,6 @@ End with a numbered list of:
   the template or conventions
 - fields mapped without full certainty
 - what I need to test in HelloID before this goes to review
+- Write the report to generated/<target>/<target>-report.md
 
 Do not silently invent anything. When in doubt, ask instead of guessing.

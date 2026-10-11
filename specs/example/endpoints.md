@@ -1,36 +1,56 @@
-# Endpoint Digest: example
+# API Specification Digest for ConnectorX - example
 
-## 🔐 Token/Authentication
-- **Scheme**: Bearer
-- **Format**: JWT
-- **Source Path**: (Inferred from security section of spec)
+## Security
+The system uses OAuth2 Bearer Token authentication. A token must be acquired via the dedicated token endpoint before making any calls.
 
-## ➕ Create User
-- **Method**: POST
-- **Route**: `/api/users`
-- **Description**: Creates a new user.
-- **Request Schema**:
-  - `Id`: integer (readOnly: true, internal ID)
-  - `EmployeeId`: string (required, external identifier)
-  - `FirstName`: string (required)
-  - `LastName`: string (required)
-  - `Email`: string (required)
-  - `Active`: boolean (required, initial state should be disabled)
-- **Response Schema**: Matches Request Schema (returns the newly created user with its `Id`).
-- **Fields Mapped**: All required fields are mapped and confirmed.
+### Token Acquisition
+*   **Endpoint:** `POST /api/oauth/token`
+*   **Purpose:** Retrieve Bearer Token
+*   **Request Body Fields:** `client_id`, `client_secret`
+*   **Response Fields:** `access_token`, `token_type`, `expires_in`
+*   **Notes:** This token must be used in the Authorization header (`Bearer <token>`) for all subsequent secured API calls.
 
-## 🔎 Lookup by Correlation Field (Employee ID)
-- **Method**: GET
-- **Route**: `/api/users/employeeid/{employeeid}`
-- **Description**: Retrieves a user based on their external EmployeeId.
-- **Fields**: Returns all user fields: `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
-- **Correlation Field**: `EmployeeId` (from request body of create endpoint).
+---
 
-## 🆔 Lookup by Internal ID
-- **Method**: GET
-- **Route**: `/api/users/{id}`
-- **Description**: Retrieves a user using the internal system ID.
-- **Fields**: Returns all user fields: `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
-- **Internal ID Field**: `Id` (from response of create endpoint).
+## Endpoints
 
-**Note on Fetch Details**: The detailed fetch operation for the GET endpoints failed due to a positional parameter error in `Get-SpecDigest.ps1`. However, the routes and fields were confirmed in Step 3 and the request/response schemas for the POST operation were successfully retrieved. The paths above rely on the structure confirmed in the initial spec digest.
+### 👤 User Management (General Lookup)
+*   **Endpoint:** `GET /api/users`
+*   **Purpose:** Retrieve all users.
+*   **Request Fields:** None.
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+
+### 🧑‍💼 Correlation Lookup (By Correlation Field)
+*   **Endpoint:** `GET /api/users/employeeid/{employeeid}`
+*   **Purpose:** Retrieve user details using a person's identifier.
+*   **Path Parameters:** `employeeid`
+*   **Request Fields:** None.
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+
+### 🆕 Create User
+*   **Endpoint:** `POST /api/users`
+*   **Purpose:** Create a new user account.
+*   **Request Body Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+*   **Notes:** The `Id` field should be provided in the request body but treated as read-only/internal during creation, as per connector conventions.
+
+### 🆔 Internal ID Lookup (By System ID)
+*   **Endpoint:** `GET /api/users/{id}`
+*   **Purpose:** Retrieve user details using the target system's unique ID.
+*   **Path Parameters:** `id` (Target System ID)
+*   **Request Fields:** None.
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+
+### 🔄 Update User
+*   **Endpoint:** `PATCH /api/users/{id}`
+*   **Purpose:** Partially update an existing user.
+*   **Path Parameters:** `id`
+*   **Request Body Fields:** `Operations`, `ContractResolver`
+*   **Response Fields:** `Id`, `EmployeeId`, `FirstName`, `LastName`, `Email`, `Active`.
+
+### 🗑️ Delete User
+*   **Endpoint:** `DELETE /api/users/{id}`
+*   **Purpose:** Delete a user.
+*   **Path Parameters:** `id`
+*   **Request Body Fields:** None.
+*   **Response Fields:** None.
