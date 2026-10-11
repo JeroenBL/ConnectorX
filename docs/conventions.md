@@ -1,83 +1,184 @@
----
-name: new-connector
-description: Generate a HelloID provisioning connector for a target system
-argument-hint: <target-system> <action(s), comma-separated: create,update,enable,disable,delete>
-disable-model-invocation: true
----
+# Connector conventions (HelloID PowerShell V2)
 
-You are generating a HelloID provisioning connector for: $ARGUMENTS
+These rules apply to every generated connector, for every action (create,
+update, disable, enable, delete). Action-specific rules live in separate
+files — see section 13.
 
-Parse $ARGUMENTS into: target, and one or more actions (comma-separated).
-If either is missing or unclear, stop and ask before continuing.
+If a rule conflicts with the API spec, follow the rule and list the
+conflict in your summary.
 
-Follow these steps exactly, and stop wherever a step tells you to. Do
-all work directly yourself — do not invoke any subagents.
+## 1. File structure
 
-## Step 1: Load context
-Read, in this order:
-1. docs/conventions.md
-2. docs/conventions-<action>.md for each requested action. If any of
-   these files does not exist or is still a placeholder, stop and ask
-   before continuing for that action.
-3. templates/<action>.ps1 for each requested action
+Every script follows this order:
 
-CLAUDE.md is loaded automatically at session start; do not re-read it
-here.
+1. Header comment: `HelloID-Conn-Prov-Target-<System>-<Action>` and `PowerShell V2`
+2. TLS 1.2 line
+3. `#region functions` (helpers only, no logic)
+4. Main `try { ... } catch { ... }`
 
-## Step 2: Build the spec digest
-Locate the spec file in specs/<target>/ (the original OpenAPI/Swagger
-file, e.g. .json or .yaml). If none is found, stop and ask for it.
+File names: `create.ps1`, `update.ps1`, `disable.ps1`, `enable.ps1`, `delete.ps1`.
+One folder per target: `generated/<target>/`.
 
-Run: ./tools/Get-SpecDigest.ps1 -SpecPath specs/<target>/<file> -Keyword user,account,employee,person
-If this returns nothing relevant, retry without -Keyword.
+## 2. Naming
 
-## Step 3: Propose endpoints — STOP HERE
-Based on the digest, propose the endpoints for:
-- token/authentication (including the request/response field names).
-- lookup by correlation field
-- create
-- lookup by internal ID (needed for any of update/enable/disable/delete,
-  if requested)
-- the requested write endpoints for each other requested action
+- Helper functions: `Verb-<System>Thing` with approved verbs
+  (e.g. `Resolve-<System>Error`, `Invoke-<System>Request`).
+- Splatted parameter hashtables: `$splat<Purpose>Params`
+  (e.g. `$splatRetrieveTokenParams`, `$splatGetAccountParams`).
+- `<System>` is the PascalCase application name, used consistently in helper
+  names, audit messages and log lines.
 
-Justify each choice using path shape and field names from the digest,
-NOT the summary or operationId (these are not always reliable).
+## 3. Configuration and secrets
 
-Wait for my confirmation before continuing. Do not run any further steps
-in this turn.
+- All URLs, client IDs, secrets and tenant values come from
+  `$actionContext.Configuration.*`. Never hard-code them.
+- Never write secrets, tokens, request bodies or full error records to any
+  output stream (no `$_ | ConvertTo-Json | Write-Warning`).
+- In examples, tests and prompts, use placeholders such as
+  `<CLIENT_ID>`, never real values.
 
-## Step 4: Fetch details
-After confirmation: run Get-SpecDigest.ps1 in detail mode (-Route and
--Method) for each confirmed endpoint. Save the confirmed choice,
-including the full auth request/response field names, to
-specs/<target>/endpoints.md.
+## 4. Authentication
 
-## Step 5: Generate the actions
-For each requested action, write generated/<target>/<action>.ps1,
-following:
-- the matching template in templates/<action>.ps1
-- docs/conventions.md and docs/conventions-<action>.md
-- the confirmed endpoints and auth details in specs/<target>/endpoints.md
+- Authentication is a separate step that runs before any account lookup.
+- The security scheme shown in a digest's "--- security ---" block
+  (e.g. "Bearer", "ApiKey", "Basic") only describes how a credential is
+  PRESENTED on each call. It never tells you where that credential
+  comes from. Depending on the auth method, the source is one of:
+  - OAuth2 (client credentials or similar): a token endpoint, typically
+    tagged "OAuth" and found among the other operations (commonly
+    POST .../token). Document its path, method, request fields, and
+    response fields in endpoints.md.
+  - Static API key: a value from $actionContext.Configuration (e.g. a
+    header or query parameter). No token endpoint exists; document
+    which header/query parameter name the spec expects.
+  - Basic Auth: a username/password from $actionContext.Configuration,
+    base64-encoded into the Authorization header. No token endpoint.
+  - Any other scheme found in the spec: document exactly what is
+    needed to construct it, even if it does not fit the patterns above.
+- If endpoints.md documents only the presentation scheme (e.g. "Bearer,
+  JWT") without saying where the credential comes from, treat it as
+  incomplete per section 12 — regardless of which auth method applies.
+- For OAuth-style flows: cache nothing between runs; request a token
+  per execution. For static credentials (API key, Basic): read them
+  from $actionContext.Configuration per execution; there is nothing to
+  request or refresh.
+- Every Invoke-RestMethod call made after the auth step must include
+  the correct header (or query parameter) for whichever auth method is
+  confirmed in endpoints.md — e.g. Headers = @{ Authorization = "Bearer
+  $($token.access_token)" } for OAuth, or Headers = @{ "X-Api-Key" =
+  $actionContext.Configuration.ApiKey } for an API key. A call missing
+  this is incomplete, even if it would otherwise run successfully
+  against a lenient test API.
 
-Do not invent endpoints or auth beyond what is confirmed there. After
-writing each file, verify it actually exists before treating that
-action as done.
+## 5. Account lookup
 
-## Step 6: Validate
-For each generated file, run:
-- Invoke-ScriptAnalyzer -Path generated/<target>/<action>.ps1
-- Invoke-Pester tests/ (if tests already exist for this target)
+- Every action except create looks up the account by
+  `$outputContext.AccountReference` (the target system's internal ID),
+  not by the correlation field. The correlation decision (create vs.
+  correlate) only happens in create — see
+  docs/conventions-create.md.
+- If the lookup returns nothing, follow the rule in the relevant
+  `conventions-<action>.md` file. Do not guess the right behavior.
 
-Fix straightforward style/syntax issues yourself. If an issue touches
-business logic (correlation order, dry-run behavior, auth flow), stop
-and show it to me instead of fixing it silently.
+## 6. Dry run
 
-## Step 7: Report
-End with a numbered list of:
-- assumptions you made
-- places where the spec was ambiguous, incomplete, or contradicted
-  the template or conventions
-- fields mapped without full certainty
-- what I need to test in HelloID before this goes to review
+- When `$actionContext.DryRun -eq $true`, make no write calls
+  (POST, PUT, PATCH, DELETE).
+- Read calls (token, lookup) still run.
+- Log a `[DryRun]` message describing what would have happened.
 
-Do not silently invent anything. When in doubt, ask instead of guessing.
+## 7. Output context
+
+Set these on every successful path, for every action:
+
+| Property | Rule |
+|---|---|
+| `$outputContext.success` | Set explicitly to `$true` or `$false` on every path |
+| `$outputContext.AccountReference` | The target system's unique ID |
+| `$outputContext.Data` | The account object returned by the API |
+
+Action-specific output fields (e.g. `AccountCorrelated` for create) are
+listed in the matching `conventions-<action>.md` file.
+
+## 8. Audit logs
+
+- Every path ends with exactly one `AuditLogs.Add`, with `Action`, `Message`
+  and `IsError`.
+- Success messages include the AccountReference:
+  `"<Action> account was successful. AccountReference is: [<id>]"`.
+- Error messages start with what failed:
+  `"Could not <action> <System> account. Error: <friendly message>"`.
+- Audit messages contain no secrets and no personal data beyond IDs.
+
+## 9. Error handling
+
+- One `Resolve-<System>Error` helper per connector, returning
+  `ScriptLineNumber`, `Line`, `ErrorDetails`, `FriendlyMessage`.
+- In the catch block, handle both `HttpResponseException` (PS 7) and
+  `WebException` (PS 5.1).
+- `Write-Information` for progress, `Write-Warning` for errors.
+  No `Write-Host`.
+
+## 10. HTTP calls
+
+- Always use `Invoke-RestMethod` with a splatted hashtable.
+- Always set `ContentType = 'application/json'` when sending a body.
+- Convert bodies with `ConvertTo-Json` (add `-Depth` if nested objects exist).
+- Use the endpoints chosen from the spec digest; do not call endpoints that
+  were not confirmed.
+- Do not wrap calls inside functions.
+- Never send a field marked readOnly in endpoints.md as part of a
+  request body (e.g. an internal `Id` field on create).
+
+## 11. Things to always report
+
+End every generation with a short list of:
+
+- Assumptions you made
+- Places where the spec was ambiguous, incomplete, or contradicted the
+  template
+- Fields you mapped without confirmation
+- What must be tested in the sandbox before merge
+
+## 12. Known pitfalls (add to this list over time)
+
+- `elseif ($obj)` is true for arrays of any size; check `.Count` before it.
+- `-not($actionContext.DryRun -eq $true)` works, but keep the pattern
+  identical across connectors so it is greppable.
+- APIs often return 200 with an empty body for "not found"; check the body,
+  not just the status code.
+- Field names in the spec (e.g. client_id, access_token) do not always
+  match the template's variable names (e.g. ClientId, token). Always
+  verify against the digest, never assume the template is still correct.
+- An endpoints.md auth section that only lists the security scheme
+  (e.g. "Bearer, JWT") without a token endpoint, request fields, and
+  response fields is incomplete and will silently produce a connector
+  with no Authorization header. Always confirm the full token flow.
+
+## 13. Action-specific rules
+
+This file only covers what is shared across every action. Rules specific
+to one action live in their own file, and must be read in addition to
+this one when generating that action:
+
+- Create: docs/conventions-create.md
+- Update: docs/conventions-update.md
+- Disable: docs/conventions-disable.md
+- Enable: docs/conventions-enable.md
+- Delete: docs/conventions-delete.md
+
+If the matching file does not exist yet, or is still a placeholder, stop
+and ask instead of inventing the missing behavior.
+
+## 14. No placeholder implementations
+
+- Every HTTP call described or implied by a template — including calls
+  only sketched as a comment (e.g. "# Example to replace the
+  placeholder code with...") — must be fully implemented with
+  Invoke-RestMethod, using the confirmed endpoint and fields from
+  endpoints.md.
+- A comment describing what should happen is not a finished
+  implementation. Hardcoded or fabricated values (e.g. New-Guid,
+  literal test data, a stub object) in place of a real API call are
+  never acceptable output, even as a "draft" — treat them the same as
+  a missing feature and either implement the real call or stop and ask.

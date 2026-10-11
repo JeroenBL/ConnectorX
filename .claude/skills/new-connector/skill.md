@@ -28,8 +28,24 @@ here.
 Locate the spec file in specs/<target>/ (the original OpenAPI/Swagger
 file, e.g. .json or .yaml). If none is found, stop and ask for it.
 
-Run: ./tools/Get-SpecDigest.ps1 -SpecPath specs/<target>/<file> -Keyword user,account,employee,person
-If this returns nothing relevant, retry without -Keyword.
+Run the digest twice, since account endpoints and the auth endpoint
+rarely share keywords:
+
+1. Account/business endpoints:
+   ./tools/Get-SpecDigest.ps1 -SpecPath specs/<target>/<file> -Keyword user,account,employee,person
+   If this returns nothing relevant, retry without -Keyword.
+
+2. Authentication endpoint, always run separately — do not assume it
+   appeared in step 1:
+   ./tools/Get-SpecDigest.ps1 -SpecPath specs/<target>/<file> -Keyword token,auth,oauth,login,credential
+   If this returns nothing relevant, retry without -Keyword and look
+   for the operation yourself in the full, unfiltered digest (commonly
+   tagged "OAuth", "Auth", or similar, or found near the top of the
+   path list).
+
+Never conclude an endpoint doesn't exist based on one keyword-filtered
+pass alone — a keyword filter can legitimately return a non-empty but
+still incomplete result.
 
 ## Step 3: Propose endpoints — STOP HERE
 Based on the digest, propose the endpoints for:
