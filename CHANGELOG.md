@@ -3,6 +3,27 @@
 All notable changes to ConnectorX (the HelloID connector generator) are
 documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.0.2]
+
+### Added
+- **Scout** skill: research-only API analysis of a target system (authentication,
+  account lookup and correlation, supported provisioning operations). Compares the
+  API with existing generated connectors and writes a feasibility report to
+  `reports/<target>-feasibility.md`.
+- README with requirements, directory structure, and usage instructions for the
+  Scout and Gen skills.
+- CHANGELOG.
+
+### Changed
+- Renamed **new-connector** skill to **Gen**. Existing skills and Claude
+  configuration do not need to be adjusted.
+- Gen now uses Scout's feasibility report as input when proposing the
+  authentication flow, correlation strategy, endpoints, and actions.
+
+### Fixed
+- Corrected the unclosed code fence and numbered-list formatting in the Gen
+  usage instructions.
+
 ## [0.0.1]
 
 ### Added
