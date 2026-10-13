@@ -124,7 +124,7 @@ try {
         }
     }
 
-    $outputContext.success = $true
+    $outputContext.Success = $true
     $outputContext.AuditLogs.Add([PSCustomObject]@{
             Action  = $lifecycleProcess
             Message = $auditLogMessage
@@ -132,7 +132,7 @@ try {
         })
 }
 catch {
-    $outputContext.success = $false
+    $outputContext.Success = $false
     $ex = $PSItem
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
