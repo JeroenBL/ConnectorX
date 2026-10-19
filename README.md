@@ -6,20 +6,21 @@
 
 - [ConnectorX](#connectorx)
   - [Introduction](#introduction)
+  - [How it works](#how-it-works)
   - [Requirements](#requirements)
   - [Directory structure](#directory-structure)
   - [How to use](#how-to-use)
     - [Available skills](#available-skills)
       - [Scout](#scout)
-        - [Using __Scout__](#using-scout)
+        - [Using __scout__](#using-scout)
       - [Gen](#gen)
-        - [Using __Gen__](#using-gen)
-    - [Output](#output)
-    - [Running the checks manually](#running-the-checks-manually)
-  - [Troubleshooting](#troubleshooting)
-  - [Contributing](#contributing)
-    - [Bug report](#bug-report)
-    - [Feature request](#feature-request)
+        - [Using __gen__](#using-gen)
+  - [Remarks](#remarks)
+    - [Gen requires a current scout report](#gen-requires-a-current-scout-report)
+    - [Gen does not start scout](#gen-does-not-start-scout)
+    - [Blocking questions must be answered first](#blocking-questions-must-be-answered-first)
+    - [Never the live environment](#never-the-live-environment)
+    - [Generated is not the same as tested](#generated-is-not-the-same-as-tested)
 
 
 ## Introduction
@@ -33,153 +34,165 @@ __ConnectorX__ is the perfect starting point for building out your new connector
 And the best part... __you don't have to code anything!__ :partying_face:
 
 No more staring at a blank wondering which code goes where. No more copy-pasting logic and hoping it still works.
-__ConnectorX__ reads an OpenAPI spec, asks you the two or three things only a human should decide, and writes the rest. :sunglasses:
+__ConnectorX__ reads the target's API specification, asks you the few things only a human should decide, and writes the rest. :sunglasses:
+
+## How it works
+
+ConnectorX uses two skills, run one after the other. [Scout](#scout) researches the API and writes a feasibility report. [Gen](#gen) builds the connector from that report, but only when you start it, only when the report is current, and only when the verdict is _Feasible_ or _Feasible with caveats_.
+
+<p align="left">
+  <img src="https://raw.githubusercontent.com/JeroenBL/ConnectorX/refs/heads/main/pipeline.png" alt="Flowchart from scout to gen. Scout checks the connector type and spec, researches the API, compares it, proposes endpoints and a verdict, writes the feasibility report and stops. You then run gen. Gen checks its arguments, whether the report is current, and the verdict. Not feasible or Insufficient information stops gen. Feasible or Feasible with caveats continues to a plan that waits for your confirmation, then endpoints.md, code generation, tests, and the generation report." width="620">
+</p>
+
+When does __gen__ run?
+
+| Condition | Gen |
+|---|---|
+| Target or connector type missing | Asks for it. The type is never guessed |
+| No feasibility report for the target | Stops: run `/scout <target> <type>` first |
+| Report type differs from the type given to gen | Stops: run scout again |
+| The report's source spec no longer exists in `specs/` | Stops: run scout again |
+| The spec was changed after the report's _Spec last modified_ date | Stops: run scout again |
+| The report's header table is incomplete | Stops: run scout again |
+| Verdict _Not feasible_ or _Insufficient information_ | Stops and explains why. Nothing is generated |
+| Verdict _Feasible_ or _Feasible with caveats_ | Continues to the plan, then waits for your confirmation |
+| Blocking question unanswered: authentication or correlation | Stops |
+| Blocking question unanswered: any other action | Builds the connector without the affected actions |
 
 ## Requirements
 
-- [Claude CLI](https://docs.claude.com/en/docs/claude-code/overview)
-- [PowerShell 7](https://learn.microsoft.com/powershell/scripting/install/installing-powershell)
-  - [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer)
-  - [Pester](https://pester.dev)
-  - [PowerShell-Yaml](https://github.com/cloudbase/powershell-yaml)
-Install the PowerShell modules:
-
-```powershell
-Install-Module PSScriptAnalyzer, Pester, powershell-yaml -Scope CurrentUser
-```
+- Claude CLI
+- PowerShell 7
+  - [PSScriptAnalyzer](https://www.powershellgallery.com/packages/PSScriptAnalyzer)
+  - [Pester](https://www.powershellgallery.com/packages/Pester) (5 or later)
+  - [powershell-yaml](https://www.powershellgallery.com/packages/powershell-yaml) (used by `tools/Get-SpecDigest.ps1` to read YAML specs)
 
 ## Directory structure
 
-```text
-.
-├── .claude/
-│   ├── commands/        # Slash commands (e.g. /new-connector)
-│   └── skills/
-│       ├── scout/       # API research skill
-│       └── gen/         # Code generation skill
-├── docs/                # Conventions and best practices
-├── generated/           # Generated and existing connectors
-│   └── <target>/
-│       ├── create.ps1
-│       ├── update.ps1
-│       ├── enable.ps1
-│       ├── disable.ps1
-│       ├── delete.ps1
-│       ├── tests/       # Pester tests
-│       └── README.md    # Connector documentation
-├── specs/               # API specs for target systems
-├── reports/             # Scout feasibility reports
-├── templates/           # Connector templates
-├── tools/               # Tools used by the skills. Like: `Get-SpecDigest`
-└── README.md
-```
+| Path | Contains | Written by |
+|---|---|---|
+| `.claude/skills/scout/` | The scout skill | — |
+| `.claude/skills/gen/` | The gen skill | — |
+| `docs/` | Conventions (`conventions.md`) and team best practices (`conventions-best-practices.md`) | — |
+| `templates/` | Connector templates gen starts from | — |
+| `examples/<connector-type>/` | Reference connectors, split by type (`rest`, `scim`, ...) | — |
+| `tools/` | Supporting tools, such as `Get-SpecDigest.ps1` | — |
+| `specs/` | API specifications, as `specs/<target>/<file>` or a loose `specs/<file>`, plus gen's `specs/<target>/endpoints.md` | You (spec), gen (`endpoints.md`) |
+| `reports/` | Feasibility reports: `reports/<target>-feasibility.md` | Scout only |
+| `generated/<target>/` | Generated connectors | Gen only |
+| `tests/<target>/` | Pester tests for generated connectors | Gen only |
+
+The connector type only decides which `examples/` folder is used. Generated connectors always go to `generated/<target>/`, whatever their type.
 
 ## How to use
 
-The typical flow is: **Scout** researches the target system, then **Gen** builds the connector from that research.
-
-```text
-Scout  ->  reports/<target>-feasibility.md  ->  Gen  ->  generated/<target>/
-```
-
 ### Available skills
+
+Both skills need a __target system name__ and a __connector type__: `rest`, `scim`, `soap` or `other`. If either is missing, the skill asks for it. The connector type is never guessed.
 
 #### Scout
 
 <p align="left">
-  <img src="./scout.png" width="150">
+  <img src="https://raw.githubusercontent.com/JeroenBL/ConnectorX/refs/heads/main/scout.png" width="150">
 </p>
 
-__Scout__ is the API research skill. It investigates a target system's API, authentication methods, account lookup and correlation capabilities, and supported provisioning operations. It also compares the API with existing generated connectors to identify reusable implementation patterns, limitations, and potential risks.
+__Scout__ is the API research skill. It reads the target's API specification and establishes:
 
-Scout produces a feasibility report in `reports/<target>-feasibility.md` for the [Gen](#gen) skill to use during development.
+- The authentication method, including where the credential comes from
+- Account listing, correlation lookup, and get by ID
+- Create, update, enable/disable, delete, and permissions
+- Constraints such as pagination, rate limits, and uniqueness
+
+Each finding gets a status (_Confirmed_, _Potential_, _Not found_ or _Unclear_) and the evidence behind it. Scout then compares the API with the baseline in `examples/BasicTargetReadme.md`, checks it against the project conventions, and reviews the existing connectors in `examples/<type>/`.
+
+Scout produces a feasibility report in `reports/<target>-feasibility.md` for the [gen](#gen) skill to use during development. The report proposes one endpoint per action and gives a verdict: _Feasible_, _Feasible with caveats_, _Not feasible_ or _Insufficient information_, with a confidence level.
 
 > [!IMPORTANT]
-> Scout is research-only. It does not generate or modify code.
+> Scout is research-only. It does not generate or modify code, and it never starts __gen__.
 
-##### Using __Scout__
+##### Using __scout__
 
-1. Open a terminal in the repo and start Claude.
-2. Run the command:
-```text
-   /scout <API Type> <spec>
-```
-   - `<API Type>`: the type of API you want to research. Eg. _rest_ or _scim_.
-   - `<spec>`: the location of the API specfication. Either in JSON/YAML format or a PDF/Word document.
-3. Review the report in `reports/<target>-feasibility.md`. Check the authentication method, the account correlation strategy, the supported operations, and the listed risks before moving on to Gen.
+1. Open a terminal in the repo.
+2. Put the API specification in `specs/`, as `specs/<target>/<file>` or as a loose `specs/<file>`. Scout accepts an OpenAPI JSON or YAML file, a WSDL, a PDF or a DOCX. You can also give it a public documentation URL.
+3. Type the command `/scout <target> <type>`
+   - `<target>`
+   a short name for the system you're connecting to, e.g. `ACME`. It matches the folder or file name in `specs/`.
+   - `<type>`
+   the connector type: `rest`, `scim`, `soap` or `other`.
+
+    **Example**
+    ```
+    /scout ACME rest
+    ```
+4. Answer scout's questions, if it has any. For example, which spec to use when there's more than one.
+5. Read the report in `reports/<target>-feasibility.md`. Pay attention to the verdict and the _blocking_ open questions. Those are the ones gen will ask you to answer.
+
 #### Gen
 
 <p align="left">
-  <img src="./gen.png" width="150">
+  <img src="https://raw.githubusercontent.com/JeroenBL/ConnectorX/refs/heads/main/gen.png" width="150">
 </p>
 
-__Gen__ is the code generation skill. It uses Scout's API research, project conventions, templates, and existing connectors to determine the required provisioning actions and generate a complete PowerShell V2 connector.
+__Gen__ is the code generation skill. It uses Scout's API research, project conventions, templates, and existing connectors to determine the required provisioning actions and generate a complete PowerShell V2 connector. You don't pick individual actions: gen builds every action the report and your answers support.
 
-Before generating code, it presents the proposed authentication flow, account lookup and correlation strategy, API endpoints, and supported actions for confirmation. Once approved, __Gen__ generates the lifecycle actions, writes and executes Pester tests, runs PSScriptAnalyzer, and creates comprehensive documentation.
+Before generating code, it presents the proposed authentication flow, account lookup and correlation strategy, API endpoints, and supported actions for confirmation. Once approved, __gen__:
 
-##### Using __Gen__
+- Writes the confirmed choices to `specs/<target>/endpoints.md`
+- Generates the lifecycle actions, configuration, field mapping, `README.md`, and `CHANGELOG.md` in `generated/<target>/`
+- Writes and runs Pester tests in `tests/<target>/`, and runs PSScriptAnalyzer
+- Writes a report of what was built and tested to `generated/<target>/<target>-report.md`
 
-1. Open a terminal in the repo.
-2. Drop the OpenAPI specification where ConnectorX expects it (`openapi/<target>.yaml`).
-3. Type the command: `/new-connector <target> <action(s)>`
-   - `<target>`: a short name for the system you're connecting to, e.g. `example`
-   - `APi Type`: the type of API. Eg _rest_ or _scim_.
-   **Examples**
-```text
-   /gen example rest
-```
+##### Using __gen__
 
-1. Wait for the API endpoints proposal. ConnectorX will come back with something like:
-   > Proposed endpoints for `example`:
-   > - Token: `POST /oauth/token` (body: client_id, client_secret)
-   > - Correlation lookup: `GET /users/employeeid/{id}`
-   > - Create: `POST /users`
-   >
-   > Confirm?
-2. Confirm the proposal, or reply with corrections (for example a different correlation field or endpoint).
-3. Let __gen__ finish the work. It will:
-   - generate the lifecycle actions
-   - write and run the Pester tests
-   - run PSScriptAnalyzer and fix findings
-   - write the connector documentation
+1. Run [scout](#using-scout) first and make sure its report is current.
+2. Type the command `/gen <target> <type>`. Use the same target and type you used for scout.
 
-### Output
+    **Example**
+    ```
+    /gen ACME rest
+    ```
+3. Wait for the implementation plan.
+    >  ConnectorX will come back with something like:<br>
+    > Proposed implementation for `ACME`:
+    > - Token: `POST /oauth/token` (client_id, client_secret, grant_type, scope)
+    > - Correlation lookup: `GET /api/hello-id/users/{employeeId}`
+    > - Create: `POST /api/hello-id/users`
+    > - Enable / Disable: `PATCH /api/hello-id/users/{employeeId}` ⚠ _Potential_
+    >
+    > Blocking questions: Is `employeeId` immutable? Does PATCH accept a partial body?
+    >
+    > Confirm?
+4. Answer the blocking questions and confirm the plan.
+5. Let __ConnectorX__ finish the work.
+6. Read `generated/<target>/<target>-report.md` for what was built, what was tested, and what still needs testing in HelloID.
 
-After a successful run you will find:
+## Remarks
 
-| Output | Location |
-| --- | --- |
-| Feasibility report (Scout) | `reports/<target>-feasibility.md` |
-| Lifecycle action scripts | `generated/<target>/` |
-| Pester tests | `generated/<target>/tests/` |
-| Connector documentation | `generated/<target>/README.md` |
+### Gen requires a current scout report
 
-### Running the checks manually
+__Gen__ does not research the API itself. It builds on the feasibility report in `reports/<target>-feasibility.md`. The report must be current, which __gen__ checks against the report's header table:
 
-```powershell
-# Tests
-Invoke-Pester -Path ./generated/<target>/tests
+- The connector type matches the one you pass to __gen__.
+- The source spec still exists under `specs/`.
+- The spec hasn't been modified since the report was written.
 
-# Static analysis
-Invoke-ScriptAnalyzer -Path ./generated/<target> -Recurse
-```
+If the verdict is _Not feasible_ or _Insufficient information_, __gen__ stops and doesn't generate anything.
 
-## Troubleshooting
+### Gen does not start scout
 
-- **Gen asks for missing information:** run Scout first, or make sure the OpenAPI file is in place.
-- **Proposed endpoints look wrong:** don't confirm. Reply with the correct endpoints and Gen will revise the proposal.
-- **PSScriptAnalyzer or Pester not found:** install the modules listed under [Requirements](#requirements) and run from PowerShell 7 (`pwsh`).
+If the report is missing or outdated, __gen__ stops and asks you to run `/scout <target> <type>` first. It never starts __scout__ for you. In the same way, a positive scout verdict never starts __gen__ automatically.
 
-## Contributing
+### Blocking questions must be answered first
 
-If you have an idea or suggestion for improving the _ConnectortX_, one of the best ways to get involved is by opening up an issue on the repo.
+The proposal lists every endpoint that scout couldn't confirm and every _blocking_ open question from the report. Answer them before you confirm. __Gen__ never guesses an answer:
 
-### Bug report
-🪲
+- An unanswered question about authentication or correlation stops __gen__ completely.
+- Any other unanswered question leaves out the actions it affects, and the final report records this.
 
-To submit a new issue, navigate to the `Issues` tab on the repository page and click the `New Issue` button. Describe the issue in as much detail as possible, including any error messages or steps to reproduce the issue. This will help the development team to diagnose and fix the problem.
+### Never the live environment
 
-### Feature request
-🚀
+Neither skill calls the target application's live environment. They read the spec in `specs/` and may fetch public documentation. Gen's Pester tests mock every API call.
 
-To request a new feature, create a new issue using the same process as for a bug report. Be sure to describe the feature you would like to see added, and explain how it would improve your experience.
+### Generated is not the same as tested
+
+Passing Pester tests and a clean PSScriptAnalyzer run do not make a connector production-ready. Always test every action, including reconciliation and reboarding, in a HelloID environment with both the cloud agent and the on-premises agent.

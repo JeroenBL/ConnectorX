@@ -5,24 +5,22 @@ documented here. Format loosely follows [Keep a Changelog](https://keepachangelo
 
 ## [0.0.2]
 
-### Added
-- **Scout** skill: research-only API analysis of a target system (authentication,
-  account lookup and correlation, supported provisioning operations). Compares the
-  API with existing generated connectors and writes a feasibility report to
-  `reports/<target>-feasibility.md`.
-- README with requirements, directory structure, and usage instructions for the
-  Scout and Gen skills.
-- CHANGELOG.
-
 ### Changed
-- Renamed **new-connector** skill to **Gen**. Existing skills and Claude
-  configuration do not need to be adjusted.
-- Gen now uses Scout's feasibility report as input when proposing the
-  authentication flow, correlation strategy, endpoints, and actions.
+- `.claude/skills/scout/skill.md`: rewritten and shortened (370 → ~190
+  lines). Scout now runs in a single pass and writes only
+  `reports/<target>-feasibility.md`. It no longer stops for endpoint
+  confirmation or writes `specs/<target>/endpoints.md`; gen already owns
+  both. Endpoints in the report are now *candidates*.
+- Scout report: added a metadata header (connector type, source and its
+  modification date, report date) so gen's freshness check has explicit
+  data to compare. Merged the baseline comparison, capability matrix and
+  endpoints into one table, reducing the report from 14 sections to 10.
+- Scout: added a convention-fit check (disabled-on-create, exact
+  correlation lookup, GET by ID, not-found shape, read-only fields)
+  against `docs/conventions.md`.
+- Scout: the HelloID documentation comparison is now opted into with a
+  `helloid-docs` argument.
 
-### Fixed
-- Corrected the unclosed code fence and numbered-list formatting in the Gen
-  usage instructions.
 
 ## [0.0.1]
 

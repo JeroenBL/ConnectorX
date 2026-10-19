@@ -15,7 +15,7 @@ If you have any questions or concerns, feel free to contact us. We are always ha
 
 ## What's in the repo?
 
-This repo contains the following:s
+This repo contains the following:
 
 - Source code for the 'Basic-EXAMPLE-Target-API' in the `src` folder.
 - Postman collection with all API calls and examples in the `assets` folder.
