@@ -338,7 +338,7 @@ h1 { font-size: 2.1rem; margin: 0; letter-spacing: -.01em; color: #cfd8e8; }
 (function () {
   "use strict";
   var LOOP = 15, MS = LOOP * 1000, FINALE = 12.9;
-  var LOOPS = 1; // after this many loops the page switches off and goes back to the reveal (index.html in this folder)
+  var LOOPS = 2; // after this many loops the page switches off and goes back to the reveal (index.html in this folder)
   var STATIONS = [{ n: 1, at: 0.9, end: 2 }, { n: 2, at: 2.3, end: 4.5 }, { n: 3, at: 4.8, end: 6.6 }, { n: 4, at: 6.9, end: 8.4 }, { n: 5, at: 8.7, end: 10.8 }, { n: 6, at: 11.1, end: 12.9 }];
   // everything takes its timing from the CSS clock animation, so the script stays in step with the keyframes
   function anim() { return document.getAnimations().filter(function (a) { return a.animationName === "clock"; })[0]; }
